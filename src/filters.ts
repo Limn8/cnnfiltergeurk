@@ -159,7 +159,7 @@ export const FILTERS: FilterPreset[] = [
     id: "center-pop",
     name: "중심 강조",
     group: "효과",
-    description: "가운데 픽셀의 목소리를 크게 키워요.",
+    description: "가운데 픽셀의 영향이 더 크게 보이게 해요.",
     kernel: [
       [0, -0.5, 0],
       [-0.5, 3, -0.5],
