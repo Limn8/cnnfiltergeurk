@@ -133,6 +133,11 @@ function App() {
     [-1, 5, -1],
     [0, -1, 0],
   ]);
+  const [customKernelText, setCustomKernelText] = useState<string[][]>([
+    ["0", "-1", "0"],
+    ["-1", "5", "-1"],
+    ["0", "-1", "0"],
+  ]);
   const [loaded, setLoaded] = useState<LoadedImage | null>(null);
   const [sample, setSample] = useState<ConvolutionSample | null>(null);
   const [fileName, setFileName] = useState("샘플 이미지");
@@ -274,12 +279,21 @@ function App() {
     const safeSize = value % 2 === 0 ? value + 1 : value;
     const nextSize = Math.max(1, Math.min(15, safeSize));
     setKernelSize(nextSize);
-    setCustomKernel((current) => resizeKernel(current, nextSize));
+    setCustomKernel((current) => {
+      const resized = resizeKernel(current, nextSize);
+      setCustomKernelText(resized.map((row) => row.map((value) => formatInputNumber(value))));
+      return resized;
+    });
     setSample(null);
   }
 
   function updateCustomKernel(row: number, col: number, value: string) {
     const parsed = Number(value);
+    setCustomKernelText((current) => {
+      const next = current.map((items) => [...items]);
+      next[row][col] = value;
+      return next;
+    });
     setCustomKernel((current) => {
       const next = current.map((items) => [...items]);
       next[row][col] = Number.isFinite(parsed) ? parsed : 0;
@@ -433,13 +447,13 @@ function App() {
               <p>{kernelSize}x{kernelSize} 행렬의 숫자를 바꿔 바로 실험해요.</p>
             </div>
             <div className="custom-kernel-grid" style={{ gridTemplateColumns: `repeat(${kernelSize}, minmax(0, 1fr))` }}>
-              {customKernel.map((row, rowIndex) =>
+              {customKernelText.map((row, rowIndex) =>
                 row.map((value, colIndex) => (
                   <input
                     aria-label={`커스텀 필터 ${rowIndex + 1}행 ${colIndex + 1}열`}
                     key={`${rowIndex}-${colIndex}`}
-                    type="number"
-                    step="0.1"
+                    type="text"
+                    inputMode="decimal"
                     value={value}
                     onChange={(event) => updateCustomKernel(rowIndex, colIndex, event.target.value)}
                     onFocus={() => setSelectedId(customFilterId)}
@@ -687,6 +701,10 @@ function buildImageMatrix(image: LoadedImage): MatrixCell[][] {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function formatInputNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
 }
 
 function channelLabel(channel: SampleChannel) {
