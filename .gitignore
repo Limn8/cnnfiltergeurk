@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+*.log
+*.tsbuildinfo
+
+.omx/logs/
+.omx/state/
+.omx/metrics.json
