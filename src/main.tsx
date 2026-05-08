@@ -554,9 +554,8 @@ function App() {
           <Matrix title={`원본 ${channelLabel(sampleChannel)} 값`} matrix={sample?.sourceValues} fallbackSize={kernelSize} />
           <Matrix
             title={selectedFilter.name}
-            matrix={selectedFilter.kernel}
+            matrix={sample?.displayKernel ?? getDisplayKernel(selectedFilter)}
             fallbackSize={kernelSize}
-            suffix={selectedFilter.divisor ? ` / ${formatNumber(selectedFilter.divisor)}` : ""}
           />
           <Matrix title="자리별 곱셈" matrix={sample?.multiplied} fallbackSize={kernelSize} />
           <div className="result-box">
@@ -700,7 +699,7 @@ function buildImageMatrix(image: LoadedImage): MatrixCell[][] {
 }
 
 function formatNumber(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, "");
 }
 
 function formatInputNumber(value: number) {
@@ -718,6 +717,11 @@ function channelLabel(channel: SampleChannel) {
     return "B";
   }
   return "밝기";
+}
+
+function getDisplayKernel(filter: FilterPreset) {
+  const divisor = filter.divisor ?? 1;
+  return filter.kernel.map((row) => row.map((value) => value / divisor));
 }
 
 createRoot(document.getElementById("root")!).render(

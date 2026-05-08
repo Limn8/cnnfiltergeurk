@@ -52,6 +52,9 @@ describe("convolution", () => {
   it("applies divisors for average blur", () => {
     const data = new Uint8ClampedArray(Array.from({ length: 9 }, (_, i) => [i * 10, i * 10, i * 10, 255]).flat());
     expect(applyKernelToPixel(data, 3, 3, 1, 1, blur)).toEqual([40, 40, 40, 255]);
+    const sample = buildConvolutionSample(data, 3, 3, 1, 1, blur);
+    expect(sample.displayKernel[1][1]).toBeCloseTo(1 / 9);
+    expect(sample.sum).toBe(40);
   });
 
   it("builds a grayscale explanation sample", () => {

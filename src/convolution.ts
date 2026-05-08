@@ -8,7 +8,7 @@ export type ConvolutionSample = {
   y: number;
   channel: SampleChannel;
   sourceValues: Kernel;
-  kernel: Kernel;
+  displayKernel: Kernel;
   multiplied: Kernel;
   sum: number;
   normalized: number;
@@ -78,27 +78,31 @@ export function buildConvolutionSample(
   const kernelSize = filter.kernel.length;
   const half = Math.floor(kernelSize / 2);
   const sourceValues = emptyKernel(kernelSize);
+  const displayKernel = emptyKernel(kernelSize);
   const multiplied = emptyKernel(kernelSize);
   let sum = 0;
+  const divisor = filter.divisor ?? 1;
 
   for (let ky = 0; ky < kernelSize; ky += 1) {
     for (let kx = 0; kx < kernelSize; kx += 1) {
       const value = getChannelValue(getPixel(data, width, height, x + kx - half, y + ky - half), channel);
-      const product = value * filter.kernel[ky][kx];
+      const displayWeight = filter.kernel[ky][kx] / divisor;
+      const product = value * displayWeight;
+      displayKernel[ky][kx] = displayWeight;
       sourceValues[ky][kx] = value;
       multiplied[ky][kx] = product;
       sum += product;
     }
   }
 
-  const normalized = sum / (filter.divisor ?? 1) + (filter.offset ?? 0);
+  const normalized = sum + (filter.offset ?? 0);
 
   return {
     x,
     y,
     channel,
     sourceValues,
-    kernel: filter.kernel,
+    displayKernel,
     multiplied,
     sum,
     normalized,
