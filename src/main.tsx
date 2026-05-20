@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { ImageUp, RotateCcw, SlidersHorizontal, Table2 } from "lucide-react";
+import { ImageUp, RotateCcw, SlidersHorizontal, Table2, X, Youtube } from "lucide-react";
 import "./styles.css";
 import {
   FILTERS,
@@ -127,6 +127,7 @@ function App() {
   const [kernelSize, setKernelSize] = useState(3);
   const [brushRadius, setBrushRadius] = useState(18);
   const [showImageMatrix, setShowImageMatrix] = useState(false);
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [sampleChannel, setSampleChannel] = useState<SampleChannel>("gray");
   const [customKernel, setCustomKernel] = useState<Kernel>([
     [0, -1, 0],
@@ -172,6 +173,19 @@ function App() {
     loadedRef.current = fallback;
     setLoaded(fallback);
   }, []);
+
+  useEffect(() => {
+    if (!isVideoOpen) {
+      return;
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsVideoOpen(false);
+      }
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isVideoOpen]);
 
   useEffect(() => {
     loadedRef.current = loaded;
@@ -412,6 +426,10 @@ function App() {
             <RotateCcw size={19} />
             <span>초기화</span>
           </button>
+          <button className="icon-button video-button" type="button" onClick={() => setIsVideoOpen(true)} title="사용법 영상 보기">
+            <Youtube size={20} />
+            <span>사용법 영상</span>
+          </button>
         </div>
       </header>
 
@@ -571,7 +589,40 @@ function App() {
           </p>
         </aside>
       </section>
+      {isVideoOpen ? <VideoModal onClose={() => setIsVideoOpen(false)} /> : null}
     </main>
+  );
+}
+
+function VideoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="video-modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        aria-label="CNN 필터 실습 사용법 영상"
+        aria-modal="true"
+        className="video-modal"
+        role="dialog"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="video-modal-header">
+          <div>
+            <p className="eyebrow">사용법 영상</p>
+            <h2>CNN 필터 실습을 사이트에서 바로 보기</h2>
+          </div>
+          <button className="close-button" type="button" onClick={onClose} title="닫기">
+            <X size={22} />
+          </button>
+        </div>
+        <div className="youtube-frame">
+          <iframe
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            src="https://www.youtube.com/embed/TtS4effB-mU?rel=0"
+            title="CNN 필터 실습 사용법 영상"
+          />
+        </div>
+      </section>
+    </div>
   );
 }
 
