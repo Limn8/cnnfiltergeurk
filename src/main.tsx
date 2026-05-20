@@ -605,10 +605,6 @@ function VideoModal({ onClose }: { onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="video-modal-header">
-          <div>
-            <p className="eyebrow">사용법 영상</p>
-            <h2>CNN 필터 실습을 사이트에서 바로 보기</h2>
-          </div>
           <button className="close-button" type="button" onClick={onClose} title="닫기">
             <X size={22} />
           </button>

@@ -600,14 +600,8 @@ h1 {
   align-items: flex-start;
   display: flex;
   gap: 16px;
-  justify-content: space-between;
-  padding: 18px 18px 14px;
-}
-
-.video-modal-header h2 {
-  font-size: clamp(1.2rem, 2vw, 1.7rem);
-  line-height: 1.2;
-  margin-bottom: 0;
+  justify-content: flex-end;
+  padding: 12px 12px 8px;
 }
 
 .close-button {
