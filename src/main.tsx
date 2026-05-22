@@ -15,6 +15,7 @@ import {
 import { applyKernelToPixel, buildConvolutionSample, rgbaToGray, type ConvolutionSample, type SampleChannel } from "./convolution";
 
 const maxImageSide = 900;
+const mobileMaxImageSide = 720;
 const customFilterId = "custom";
 const channelOptions: Array<{ id: SampleChannel; label: string; description: string }> = [
   { id: "gray", label: "밝기", description: "설명용 흑백 밝기" },
@@ -38,6 +39,19 @@ type MatrixCell = {
   source: number;
   result: number;
   touched: boolean;
+};
+
+type ScratchPoint = {
+  x: number;
+  y: number;
+  filter: FilterPreset;
+};
+
+type DirtyRect = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 };
 
 function createFallbackImage(): LoadedImage {
@@ -97,7 +111,9 @@ async function loadImage(file: File): Promise<LoadedImage> {
     image.src = imageUrl;
     await image.decode();
 
-    const scale = Math.min(1, maxImageSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const targetMaxSide =
+      window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 900 ? mobileMaxImageSide : maxImageSide;
+    const scale = Math.min(1, targetMaxSide / Math.max(image.naturalWidth, image.naturalHeight));
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
     const height = Math.max(1, Math.round(image.naturalHeight * scale));
     const canvas = document.createElement("canvas");
@@ -148,6 +164,9 @@ function App() {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const loadedRef = useRef<LoadedImage | null>(null);
   const lastSamplePointRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingScratchRef = useRef<ScratchPoint | null>(null);
+  const scratchFrameRef = useRef<number | null>(null);
+  const lastSampleUpdateRef = useRef(0);
 
   const customFilter = useMemo<FilterPreset>(
     () => ({
@@ -232,6 +251,31 @@ function App() {
       composed.data[offset + 2] = image.result.data[offset + 2];
     }
     ctx.putImageData(composed, 0, 0);
+  }
+
+  function drawScratchPatch(image: LoadedImage, dirty: DirtyRect) {
+    const canvas = scratchRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) {
+      return;
+    }
+    const width = dirty.maxX - dirty.minX + 1;
+    const height = dirty.maxY - dirty.minY + 1;
+    const patch = ctx.createImageData(width, height);
+
+    for (let py = dirty.minY; py <= dirty.maxY; py += 1) {
+      for (let px = dirty.minX; px <= dirty.maxX; px += 1) {
+        const sourceOffset = (py * image.width + px) * 4;
+        const patchOffset = ((py - dirty.minY) * width + (px - dirty.minX)) * 4;
+        const data = image.mask[py * image.width + px] === 1 ? image.result.data : image.source.data;
+        patch.data[patchOffset] = data[sourceOffset];
+        patch.data[patchOffset + 1] = data[sourceOffset + 1];
+        patch.data[patchOffset + 2] = data[sourceOffset + 2];
+        patch.data[patchOffset + 3] = data[sourceOffset + 3];
+      }
+    }
+
+    ctx.putImageData(patch, dirty.minX, dirty.minY);
   }
 
   function drawPreviewCanvas(image: LoadedImage) {
@@ -331,15 +375,40 @@ function App() {
     };
   }
 
+  function queueScratch(point: ScratchPoint, immediate = false) {
+    pendingScratchRef.current = point;
+    if (immediate) {
+      flushScratch();
+      return;
+    }
+    if (scratchFrameRef.current === null) {
+      scratchFrameRef.current = window.requestAnimationFrame(flushScratch);
+    }
+  }
+
+  function flushScratch() {
+    if (scratchFrameRef.current !== null) {
+      window.cancelAnimationFrame(scratchFrameRef.current);
+      scratchFrameRef.current = null;
+    }
+    const point = pendingScratchRef.current;
+    pendingScratchRef.current = null;
+    if (!point) {
+      return;
+    }
+    scratchAt(point.x, point.y, point.filter);
+  }
+
   function scratchAt(x: number, y: number, filter: FilterPreset) {
     const current = loadedRef.current;
     if (!current) {
       return;
     }
-    const resultData = new Uint8ClampedArray(current.result.data);
-    const nextMask = new Uint8ClampedArray(current.mask);
+    const resultData = current.result.data;
+    const nextMask = current.mask;
     let touchedCount = current.touchedCount;
     const radiusSquared = brushRadius * brushRadius;
+    let dirty: DirtyRect | null = null;
 
     for (let py = y - brushRadius; py <= y + brushRadius; py += 1) {
       if (py < 0 || py >= current.height) {
@@ -365,19 +434,28 @@ function App() {
           touchedCount += 1;
         }
         nextMask[maskIndex] = 1;
+        dirty = dirty
+          ? {
+              minX: Math.min(dirty.minX, px),
+              minY: Math.min(dirty.minY, py),
+              maxX: Math.max(dirty.maxX, px),
+              maxY: Math.max(dirty.maxY, py),
+            }
+          : { minX: px, minY: py, maxX: px, maxY: py };
       }
     }
 
-    const next = {
-      ...current,
-      result: new ImageData(resultData, current.width, current.height),
-      mask: nextMask,
-      touchedCount,
-    };
-    loadedRef.current = next;
+    if (!dirty) {
+      return;
+    }
+    current.touchedCount = touchedCount;
     lastSamplePointRef.current = { x, y };
-    setSample(buildConvolutionSample(current.source.data, current.width, current.height, x, y, filter, sampleChannel));
-    paintCanvases(next);
+    const now = performance.now();
+    if (now - lastSampleUpdateRef.current > 140) {
+      lastSampleUpdateRef.current = now;
+      setSample(buildConvolutionSample(current.source.data, current.width, current.height, x, y, filter, sampleChannel));
+    }
+    drawScratchPatch(current, dirty);
   }
 
   function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
@@ -387,7 +465,8 @@ function App() {
     }
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsDragging(true);
-    scratchAt(point.x, point.y, selectedFilter);
+    lastSampleUpdateRef.current = 0;
+    queueScratch({ x: point.x, y: point.y, filter: selectedFilter }, true);
   }
 
   function handlePointerMove(event: PointerEvent<HTMLCanvasElement>) {
@@ -396,15 +475,24 @@ function App() {
     }
     const point = getCanvasPoint(event);
     if (point) {
-      scratchAt(point.x, point.y, selectedFilter);
+      queueScratch({ x: point.x, y: point.y, filter: selectedFilter });
     }
   }
 
   function stopDragging() {
+    flushScratch();
     setIsDragging(false);
     const current = loadedRef.current;
     if (current) {
-      setLoaded(current);
+      const snapshot = {
+        ...current,
+        result: new ImageData(new Uint8ClampedArray(current.result.data), current.width, current.height),
+        mask: new Uint8ClampedArray(current.mask),
+        touchedCount: current.touchedCount,
+      };
+      loadedRef.current = snapshot;
+      drawPreviewCanvas(snapshot);
+      setLoaded(snapshot);
     }
   }
 
